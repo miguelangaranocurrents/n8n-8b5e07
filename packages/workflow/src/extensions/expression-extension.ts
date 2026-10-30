@@ -431,6 +431,28 @@ export const extendTransform = (expression: string): { code: string } | undefine
 			},
 		});
 
+		// `??` can't be mixed with `&&` or `||` without parentheses. When one of the
+		// rewrites above forces recast to reprint a logical expression, it drops the
+		// original parentheses around such an operand, producing invalid syntax.
+		// Wrap those operands explicitly so they always keep their grouping.
+		visit(ast, {
+			visitLogicalExpression(path) {
+				this.traverse(path);
+
+				const node = path.node;
+				const isNullish = node.operator === '??';
+				const needsGrouping = (operand: ExpressionKind) =>
+					operand.type === 'LogicalExpression' && (operand.operator === '??') !== isNullish;
+
+				if (needsGrouping(node.left)) {
+					node.left = types.builders.parenthesizedExpression(node.left);
+				}
+				if (needsGrouping(node.right)) {
+					node.right = types.builders.parenthesizedExpression(node.right);
+				}
+			},
+		});
+
 		return print(ast);
 	} catch (e) {
 		return;
